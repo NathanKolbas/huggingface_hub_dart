@@ -1,5 +1,7 @@
 # Huggingface Hub Dart
 
+🚧 **THIS IS CURRENTLY A WORK IN PROGRESS** 🚧
+
 The unofficial Dart client for the Huggingface Hub.
 
 Not all of the methods/functions have been implemented yet from the official huggingface_hub. However, the commonly used ones to download models/files, repos, etc. are implemented.
