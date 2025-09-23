@@ -1,7 +1,21 @@
 name: huggingface_hub
-description: "The unofficial Dart client for the Huggingface Hub."
+description: The unofficial Dart client for the Huggingface Hub.
 version: 0.0.1
-homepage:
+homepage: https://github.com/NathanKolbas/huggingface_hub_dart
+repository: https://github.com/NathanKolbas/huggingface_hub_dart
+topics:
+  - machine-learning
+  - natural-language-processing
+  - deep-learning
+  - models
+  - model-hub
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  windows:
 
 environment:
   sdk: ^3.8.1
