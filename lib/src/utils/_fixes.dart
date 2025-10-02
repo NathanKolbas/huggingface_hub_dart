@@ -1,4 +1,4 @@
-import 'dart:io' show RandomAccessFile, File, Directory;
+import 'dart:io';
 import 'dart:math';
 
 import 'package:path/path.dart' as path;
@@ -30,11 +30,12 @@ Future<T> WeakFileLock<T>(String path, Future<T> Function() underLock) async {
   if (!await f.exists()) {
     await f.create(recursive: true);
   }
-  final RandomAccessFile raf = await f.open();
+  final RandomAccessFile raf = await f.open(mode: FileMode.write);
   try {
     await raf.lock();
     return await underLock();
   } finally {
+    await raf.unlock();
     await raf.close();
     await f.delete();
   }

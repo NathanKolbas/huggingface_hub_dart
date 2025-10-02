@@ -213,7 +213,7 @@ class SafeTensorsInfo {
   });
 
   factory SafeTensorsInfo.fromJson(Map<String, dynamic> json) => SafeTensorsInfo(
-    parameters: json['parameters'],
+    parameters: Map<String, int>.from(json['parameters']),
     total: json['total'],
   );
 }

@@ -1,3 +1,13 @@
+/// A helper function to handle the Python type Optional[Union[T, List[T]]].
+/// We will make this equivalent to List<T>?. This means if [data] is T then it
+/// will be in a [List] by itself. This makes it easier to work with in Dart.
+List<T>? _parseTypeOrListOfType<T>(dynamic data) {
+  if (data == null) return null;
+  if (data.runtimeType == T) return [data];
+
+  return List<T>.from(data);
+}
+
 /// Flattened representation of individual evaluation results found in model-index of Model Cards.
 ///
 /// For more information on the model-index spec, see https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1.
@@ -285,18 +295,18 @@ class ModelCardData extends CardData {
   }
 
   factory ModelCardData.fromJson(Map<String, dynamic> data, {bool ignoreMetadataErrors = false}) => ModelCardData(
-    baseModel: data['base_model'],
-    datasets: data['datasets'],
+    baseModel: _parseTypeOrListOfType(data['base_model']),
+    datasets: _parseTypeOrListOfType(data['datasets']),
     evalResults: data['eval_results'],
-    language: data['language'],
+    language: _parseTypeOrListOfType(data['language']),
     libraryName: data['library_name'],
     license: data['license'],
     licenseName: data['license_name'],
     licenseLink: data['license_link'],
-    metrics: data['metrics'],
+    metrics: _parseTypeOrListOfType(data['metrics']),
     modelName: data['model_name'],
     pipelineTag: data['pipeline_tag'],
-    tags: data['tags'],
+    tags: _parseTypeOrListOfType(data['tags']),
     ignoreMetadataErrors: ignoreMetadataErrors,
     kwargs: data,
   );
@@ -374,23 +384,24 @@ class DatasetCardData extends CardData {
     kwargs ??= {};
 
     // TODO - maybe handle this similarly to EvalResult?
-    trainEvalIndex ??= kwargs.remove('train-eval-index');
+    final trainEvalIndex = kwargs.remove('train-eval-index');
+    this.trainEvalIndex ??= trainEvalIndex == null ? null : Map<String, dynamic>.from(trainEvalIndex);
   }
 
   factory DatasetCardData.fromJson(Map<String, dynamic> data, {bool ignoreMetadataErrors = false}) => DatasetCardData(
-    language: data['language'],
-    license: data['license'],
-    annotationsCreators: data['annotations_creators'],
-    languageCreators: data['language_creators'],
-    multilinguality: data['multilinguality'],
-    sizeCategories: data['size_categories'],
-    sourceDatasets: data['source_datasets'],
-    taskCategories: data['task_categories'],
-    taskIds: data['task_ids'],
+    language: _parseTypeOrListOfType(data['language']),
+    license: _parseTypeOrListOfType(data['license']),
+    annotationsCreators: _parseTypeOrListOfType(data['annotations_creators']),
+    languageCreators: _parseTypeOrListOfType(data['language_creators']),
+    multilinguality: _parseTypeOrListOfType(data['multilinguality']),
+    sizeCategories: _parseTypeOrListOfType(data['size_categories']),
+    sourceDatasets: _parseTypeOrListOfType(data['source_datasets']),
+    taskCategories: _parseTypeOrListOfType(data['task_categories']),
+    taskIds: _parseTypeOrListOfType(data['task_ids']),
     paperswithcodeId: data['paperswithcode_id'],
     prettyName: data['pretty_name'],
-    trainEvalIndex: data['train_eval_index'],
-    configNames: data['config_names'],
+    trainEvalIndex: data['train_eval_index'] != null ? Map<String, dynamic>.from(data['train_eval_index']) : null,
+    configNames: _parseTypeOrListOfType(data['config_names']),
     ignoreMetadataErrors: ignoreMetadataErrors,
     kwargs: data,
   );

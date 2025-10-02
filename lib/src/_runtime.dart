@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:hf_xet/hf_xet.dart';
 import 'package:huggingface_hub/src/constants.dart' as constants;
 
 /// TODO: This isn't *really* a thing in Dart...
@@ -20,5 +21,5 @@ bool isXetAvailable() {
   // since hf_xet is automatically used if available, allow explicit disabling via environment variable
   if (constants.HF_HUB_DISABLE_XET) return false;
 
-  return isPackageAvailable('hf_xet');
+  return HfXet.isSupported();
 }

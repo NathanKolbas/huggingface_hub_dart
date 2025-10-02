@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:huggingface_hub/huggingface_hub.dart';
 
@@ -38,5 +38,18 @@ void main() {
       print('OUTPUT: $f');
       expect(f, contains('README.md'));
     });
+
+    test(
+      'can download to local folder google-bert/bert-base-uncased/flax_model.msgpack without using xet',
+          () async {
+        final f = await hfHubDownload(
+          repoId: 'google-bert/bert-base-uncased',
+          filename: 'flax_model.msgpack',
+          localDir: 'huggingface_local_test',
+        );
+        print('OUTPUT: $f');
+        expect(f, contains('flax_model.msgpack'));
+      },
+    );
   });
 }

@@ -1,9 +1,9 @@
 // This file contains utils for python code written to work in dart
 
-import 'dart:io' show File, FileSystemException, FileSystemEntity, FileSystemEntityType, Link;
+import 'dart:io' show File, FileSystemException, FileSystemEntity, Link;
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'package:huggingface_hub/src/utils/platform/platform.dart';
 import 'package:path/path.dart' as p;
 
 /// Finds the longest common path from a list of absolute paths.
@@ -101,7 +101,7 @@ Future<File> moveFile(String src, String dst) async {
   try {
     // First try to move the file
     newFile = await srcFile.rename(dst);
-  } on FileSystemException catch (e) {
+  } on FileSystemException catch (_) {
     // On some platforms, a rename operation cannot move a file between different file systems.
     // If that is the case, we copy the file to the new location and then remove the original.
     newFile = await srcFile.copy(dst);

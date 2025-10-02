@@ -6,6 +6,7 @@ import 'dart:typed_data' show Uint8List;
 import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:hf_xet/hf_xet.dart';
 import 'package:huggingface_hub/src/constants.dart' as constants;
 import 'package:huggingface_hub/src/errors.dart';
 import 'package:huggingface_hub/src/utils/_fixes.dart';
@@ -68,7 +69,7 @@ Future<bool> areSymlinksSupported([String? cacheDir]) async {
       // final relativeSrc = path.relative(srcPath, from: path.dirname(dstPath));
       try {
         await Link(dstPath).create(srcPath, recursive: true);
-      } on FileSystemException catch (e) {
+      } on FileSystemException catch (_) {
         // Likely running on Windows
         _areSymlinksSupportedInDir[cacheDir!] = false;
 
@@ -402,8 +403,8 @@ Future<void> httpGet(
       headers['Range'] = 'bytes=0-0';
     } else {
       throw ArgumentError(
-          "The file is too large to be downloaded using the regular download method. Use `hf_transfer` or `hf_xet` instead."
-          " Try `pip install hf_transfer` or `pip install hf_xet`."
+          "The file is too large to be downloaded using the regular download "
+              "method. Use `hf_transfer` or `hf_xet` instead."
       );
     }
   }
@@ -510,12 +511,49 @@ Future<void> httpGet(
   }
 }
 
-/// This is currently not implemented. Xet needs to be added to Dart. You can find
-/// the project here: https://github.com/huggingface/xet-core. Basically, bindins
-/// need to be created for the Rust library and Dart. No idea if this will *just work*
-/// cross-platform. Probably can use https://pub.dev/packages/flutter_rust_bridge to
-/// make this work.
-void xetGet({
+/// Download a file using Xet storage service.
+///
+/// Args:
+///     incomplete_path (`Path`):
+///         The path to the file to download.
+///     xet_file_data (`XetFileData`):
+///         The file metadata needed to make the request to the xet storage service.
+///     headers (`Dict[str, str]`):
+///         The headers to send to the xet storage service.
+///     expected_size (`int`, *optional*):
+///         The expected size of the file to download. If set, the download will raise an error if the size of the
+///         received content is different from the expected one.
+///     displayed_filename (`str`, *optional*):
+///         The filename of the file that is being downloaded. Value is used only to display a nice progress bar. If
+///         not set, the filename is guessed from the URL or the `Content-Disposition` header.
+///
+/// **How it works:**
+///     The file download system uses Xet storage, which is a content-addressable storage system that breaks files into chunks
+///     for efficient storage and transfer.
+///
+///     `hf_xet.download_files` manages downloading files by:
+///     - Taking a list of files to download (each with its unique content hash)
+///     - Connecting to a storage server (CAS server) that knows how files are chunked
+///     - Using authentication to ensure secure access
+///     - Providing progress updates during download
+///
+///     Authentication works by regularly refreshing access tokens through `refresh_xet_connection_info` to maintain a valid
+///     connection to the storage server.
+///
+///     The download process works like this:
+///     1. Create a local cache folder at `~/.cache/huggingface/xet/chunk-cache` to store reusable file chunks
+///     2. Download files in parallel:
+///         2.1. Prepare to write the file to disk
+///         2.2. Ask the server "how is this file split into chunks?" using the file's unique hash
+///             The server responds with:
+///             - Which chunks make up the complete file
+///             - Where each chunk can be downloaded from
+///         2.3. For each needed chunk:
+///             - Checks if we already have it in our local cache
+///             - If not, download it from cloud storage (S3)
+///             - Save it to cache for future use
+///             - Assemble the chunks in order to recreate the original file
+Future<void> xetGet({
   required String incompletePath,
   required XetFileData xetFileData,
   required Map<String, String> headers,
@@ -523,8 +561,65 @@ void xetGet({
   String? displayedFilename,
   // TODO: Come up with some kind of alternative for this:
   // _tqdm_bar: Optional[tqdm] = None,
-}) {
-  // TODO: This needs to be implemented
+}) async {
+  final connectionInfo = await refreshXetConnectionInfo(fileData: xetFileData, headers: headers);
+
+  Future<DartTokenInfo> tokenRefresher() async {
+    final connectionInfo = await refreshXetConnectionInfo(fileData: xetFileData, headers: headers);
+    return DartTokenInfo(
+      token: connectionInfo.accessToken,
+      expiration: BigInt.from(connectionInfo.expirationUnixEpoch),
+    );
+  }
+
+  // I have no clue how in the python code expectedSize can be null when on the
+  // rust side it has to be u64... What does python do when calling the rust side
+  // when expectedSize is null? TODO: Investigate this further.
+  if (expectedSize == null) {
+    throw StateError('The expectedSize was null for xetGet. Please make an issue so this can be investigated further.');
+  }
+
+  final xetDownloadInfo = [
+    DartXetDownloadInfo(
+      destinationPath: path.absolute(incompletePath),
+      hash: xetFileData.fileHash,
+      fileSize: BigInt.from(expectedSize),
+    ),
+  ];
+
+  displayedFilename ??= path.basename(incompletePath);
+
+  if (displayedFilename.length > 40) {
+    displayedFilename = '${displayedFilename.substring(0, 40)}(…)';
+  }
+
+  // progress_cm = _get_progress_bar_context(
+  //   desc=displayed_filename,
+  //   log_level=logger.getEffectiveLevel(),
+  //   total=expected_size,
+  //   initial=0,
+  //   name="huggingface_hub.xet_get",
+  //   _tqdm_bar=_tqdm_bar,
+  // )
+
+  // with progress_cm as progress:
+
+    // def progress_updater(progress_bytes: float):
+    //   progress.update(progress_bytes)
+
+  await downloadFiles(
+    files: xetDownloadInfo,
+    endpoint: connectionInfo.endpoint,
+    tokenInfo: (
+      connectionInfo.accessToken,
+      BigInt.from(connectionInfo.expirationUnixEpoch),
+    ),
+    tokenRefresher: tokenRefresher,
+    // progressUpdater: [progress_updater],
+    progressUpdater: (file, totalUpdate, itemUpdates) {
+      print('file: $file,\ntotalUpdate: $totalUpdate,\nitemUpdates: $itemUpdates');
+    },
+  );
 }
 
 /// Normalize ETag HTTP header, so it can be used to create nice filepaths.
@@ -612,7 +707,7 @@ Future<void> _createSymlink(String src, String dst, {bool newBlob = false}) asyn
     try {
       await Link(absDst).create(absSrc, recursive: true);
       return;
-    } on FileSystemException catch (e) {
+    } on FileSystemException catch (_) {
       // TODO: Need to figure out what errors are thrown to catch like in python
       rethrow;
     }
@@ -1620,8 +1715,8 @@ Future<void> _downloadToTmpAndMove({
     }
 
     if (xetFileData != null && isXetAvailable()) {
-      print('Xet Storage is enabled for this repo. Downloading file from Xet Storage..');
-      xetGet(
+      print('Xet Storage is enabled for this repo. Downloading file from Xet Storage...');
+      await xetGet(
         incompletePath: incompletePath,
         xetFileData: xetFileData,
         headers: headers,

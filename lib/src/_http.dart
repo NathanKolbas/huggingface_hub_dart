@@ -1,7 +1,7 @@
 // ignore_for_file: non_constant_identifier_names, constant_identifier_names
 
 import 'dart:convert';
-import 'dart:io' show IOSink, File;
+import 'dart:io' show File;
 import 'dart:math';
 
 import 'package:cookie_jar/cookie_jar.dart';

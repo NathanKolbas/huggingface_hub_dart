@@ -2,8 +2,8 @@
 
 // Possible values for env variables
 
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:huggingface_hub/huggingface_hub.dart';
+import 'package:huggingface_hub/src/utils/platform/platform.dart';
 import 'package:path/path.dart' as path;
 
 const Set<String> ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"};
@@ -85,10 +85,10 @@ String getUserHomePath() {
     return envVars['HOME']!;
   } else if (Platform.isWindows) {
     return envVars['USERPROFILE']!;
+  } else if (Platform.isAndroid || Platform.isIOS) {
+    return HuggingfaceHub.defaultMobileHomeDir;
   }
 
-  // Return null for other platforms (like mobile) or if the
-  // environment variable is not set.
   throw UnsupportedError('getUserHomePath is not supported on this platform');
 }
 
