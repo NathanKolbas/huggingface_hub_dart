@@ -6,6 +6,7 @@ import 'dart:typed_data' show Uint8List;
 import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:hf_transfer/hf_transfer.dart' as hf_transfer;
 import 'package:hf_xet/hf_xet.dart';
 import 'package:huggingface_hub/src/constants.dart' as constants;
 import 'package:huggingface_hub/src/errors.dart';
@@ -319,11 +320,11 @@ Future<Response> _requestWrapper({
 /// Returns:
 /// `int` or `None`: The length of the file in bytes, or None if not available.
 int? _getFileLengthFromHttpResponse(Response response) {
-  String? contentRange = response.headers.value('Content-Range');
+  final String? contentRange = response.headers.value('Content-Range');
   if (contentRange != null) return int.parse(contentRange.split('/').last);
 
-  contentRange = response.headers.value('Content-Range');
-  if (contentRange != null) return int.parse(contentRange);
+  final String? contentLength = response.headers.value('Content-Length');
+  if (contentLength != null) return int.parse(contentLength);
 
   return null;
 }
@@ -370,7 +371,7 @@ Future<void> httpGet(
   if (expectedSize != null && resumeSize == expectedSize) return;
 
   final hasCustomRangeHeader = headers != null && [for (final h in headers.keys) h.toLowerCase() == 'range'].contains(true);
-  final hfTransfer = null;
+  bool hfTransfer = false;
   if (constants.HF_HUB_ENABLE_HF_TRANSFER) {
     if (resumeSize != 0) {
       print("'hf_transfer' does not support `resume_size`: falling back to regular download method");
@@ -379,14 +380,19 @@ Future<void> httpGet(
     } else if (hasCustomRangeHeader) {
       print("'hf_transfer' ignores custom 'Range' headers; falling back to regular download method");
     } else {
-      // TODO: hf_transfer needs to be implemented. Basically the same thing as xet:
-      // https://github.com/huggingface/hf_transfer
-      throw UnimplementedError(
-          "Fast download using 'hf_transfer' is enabled"
-          " (HF_HUB_ENABLE_HF_TRANSFER=1) but 'hf_transfer' package is not"
-          " available in your environment. Try `pip install hf_transfer`."
-          " JK THIS IS DART LOL - NEEDS TO BE IMPLEMENTED..."
-      );
+      if (isHfTransferAvailable()) {
+        hfTransfer = true;
+      } else {
+        throw UnimplementedError(
+            "Fast download using 'hf_transfer' is enabled"
+                " (HF_HUB_ENABLE_HF_TRANSFER=1) but 'hf_transfer' is not"
+                " available in your environment. Ensure you called "
+                "`HuggingfaceHub.ensureInitialized` or try initializing with "
+                "`throwOnFail: true` or `throwOnSpecificErrors: const "
+                "HuggingfaceHubThrowOnError(setupHfTransfer: true)` to "
+                "check for errors."
+        );
+      }
     }
   }
 
@@ -399,7 +405,7 @@ Future<void> httpGet(
     // Any files over 50GB will not be available through basic http request.
     // Setting the range header to 0-0 will force the server to return the file size in the Content-Range header.
     // Since hf_transfer splits the download into chunks, the process will succeed afterwards.
-    if (hfTransfer != null) {
+    if (hfTransfer) {
       headers['Range'] = 'bytes=0-0';
     } else {
       throw ArgumentError(
@@ -459,14 +465,38 @@ Future<void> httpGet(
   // )
 
   // with progress_cm as progress:
-  if (hfTransfer != null && total != null && total > 5 * constants.DOWNLOAD_CHUNK_SIZE) {
-    // try {
-    //   hf_transfer.download();
-    // }
-    throw UnimplementedError('Fast download using "hf_transfer" is not implemented yet.');
+  if (hfTransfer && total != null && total > 5 * constants.DOWNLOAD_CHUNK_SIZE) {
+    try {
+      await hf_transfer.download(
+        url: url,
+        filename: tempFile.path,
+        maxFiles: BigInt.from(constants.HF_TRANSFER_CONCURRENCY),
+        chunkSize: BigInt.from(constants.DOWNLOAD_CHUNK_SIZE),
+        headers: initialHeaders == null ? null : Map<String, String>.from(initialHeaders),
+        parallelFailures: BigInt.from(3),
+        maxRetries: BigInt.from(5),
+        // callback: progress.update
+      );
+    } catch (e) {
+      throw StateError(
+        "An error occurred while downloading using `hf_transfer`. Consider"
+            " disabling HF_HUB_ENABLE_HF_TRANSFER for better error handling. "
+            "Error: $e",
+      );
+    }
+
+    final fileSize = await tempFile.length();
+    if (expectedSize != null && expectedSize != fileSize) {
+      throw StateError(
+        consistencyErrorMessage.replaceAll(r'{{actual_size}}', fileSize.toString()),
+      );
+    }
+
     return;
   }
+
   int newResumeSize = resumeSize;
+
   try {
     final Stream<Uint8List> stream = (r.data as ResponseBody).stream;
 
@@ -1492,7 +1522,9 @@ Future<(String?, String?, String?, int?, XetFileData?, Exception?)> _getMetadata
 }) async {
   if (localFilesOnly) {
     return (null, null, null, null, null, OfflineModeIsEnabled(
-      "Cannot access file since 'local_files_only=True' as been set. (repo_id: $repoId, repo_type: $repoType, revision: $revision, filename: $filename)",
+      "Cannot access file since 'local_files_only=True' as been set. "
+          "(repo_id: $repoId, repo_type: $repoType, revision: $revision, "
+          "filename: $filename)",
     ));
   }
 
@@ -1724,12 +1756,14 @@ Future<void> _downloadToTmpAndMove({
         displayedFilename: filename,
       );
     } else {
-      if (xetFileData != null && constants.HF_HUB_DISABLE_XET) {
+      if (xetFileData != null && !constants.HF_HUB_DISABLE_XET) {
         print(
-            "Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. "
-                "Falling back to regular HTTP download. "
-                "For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`\n\n"
-                "JK THIS ISN'T A PYTHON PACK LOL"
+            "Xet Storage is enabled for this repo, but 'hf_xet' is not"
+                " available in your environment. Ensure you called "
+                "`HuggingfaceHub.ensureInitialized` or try initializing with "
+                "`throwOnFail: true` or `throwOnSpecificErrors: const "
+                "HuggingfaceHubThrowOnError(setupHfXet: true)` to "
+                "check for errors."
         );
       }
 

@@ -1,6 +1,6 @@
 name: huggingface_hub
 description: The unofficial Dart client for the Huggingface Hub.
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/NathanKolbas/huggingface_hub_dart
 repository: https://github.com/NathanKolbas/huggingface_hub_dart
 topics:
@@ -34,7 +34,8 @@ dependencies:
   pool: ^1.5.1
   uuid: ^4.5.1
   path_provider: ^2.1.5
-  hf_xet: ^1.0.1
+  hf_xet: ^1.0.2
+  hf_transfer: ^0.0.1
 
 dev_dependencies:
   flutter_test:

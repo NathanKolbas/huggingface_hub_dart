@@ -189,14 +189,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  hf_transfer:
+    dependency: transitive
+    description:
+      name: hf_transfer
+      sha256: b93fb1c2f0c16fe2a4a78d7c3741e2b86757233c27cf92d3b1dab361802e7388
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.1"
   hf_xet:
     dependency: transitive
     description:
       name: hf_xet
-      sha256: "606d79560c3f06e8dbf817f8cfc2c0d1ae61d5ec202580558d28ec264163d0d3"
+      sha256: de827c1338d10299db5dc33f0b5f50b11c52f186236a5bfa808ba3f83624becd
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1"
+    version: "1.0.2"
   http_parser:
     dependency: transitive
     description:
@@ -211,7 +219,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.0.1"
+    version: "0.0.2"
   integration_test:
     dependency: "direct dev"
     description: flutter

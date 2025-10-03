@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:hf_transfer/hf_transfer.dart';
 import 'package:hf_xet/hf_xet.dart';
 import 'package:huggingface_hub/src/constants.dart' as constants;
 
@@ -23,3 +24,5 @@ bool isXetAvailable() {
 
   return HfXet.isSupported();
 }
+
+bool isHfTransferAvailable() => constants.HF_HUB_ENABLE_HF_TRANSFER && HfTransfer.isSupported();
